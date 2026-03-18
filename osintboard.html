@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OSINT Board — Live</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Mono:wght@300;400;500&family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap');
+
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { width:100%; height:100%; overflow:hidden; background:#111; }
+
+/* ── TOP BAR ── */
+#topbar {
+  position:fixed; top:0; left:0; right:0; z-index:500;
+  height:52px; background:#0e0e12;
+  border-bottom:1px solid rgba(255,255,255,0.09);
+  display:flex; align-items:center; padding:0 1rem; gap:0.8rem;
+  font-family:'IBM Plex Mono',monospace;
+}
+.logo { font-size:0.82rem; letter-spacing:0.18em; color:#7EC88C; font-weight:500; flex-shrink:0; }
+.logo em { color:#334; font-style:normal; }
+.live-badge {
+  font-size:0.48rem; background:#7EC88C; color:#0a1a0c;
+  padding:2px 6px; letter-spacing:0.15em; font-weight:600; flex-shrink:0;
+  animation: pulse-badge 2s infinite;
+}
+@keyframes pulse-badge { 0%,100%{opacity:1} 50%{opacity:0.7} }
+.search-wrap {
+  flex:1; max-width:480px; display:flex;
+  border:1px solid rgba(255,255,255,0.13); overflow:hidden;
+}
+#search-input {
+  flex:1; background:rgba(255,255,255,0.03); border:none; outline:none;
+  color:#c8ccc8; font-family:'IBM Plex Mono',monospace; font-size:0.76rem;
+  padding:0 0.8rem; caret-color:#7EC88C;
+}
+#search-input::placeholder { color:#333; }
+#search-btn {
+  background:#7EC88C; color:#0a1a0c; border:none; cursor:pointer;
+  font-family:'IBM Plex Mono',monospace; font-size:0.68rem; font-weight:500;
+  padding:0 1rem; letter-spacing:0.1em; transition:background 0.15s; white-space:nowrap;
+}
+#search-btn:hover { background:#9EE8AC; }
+#search-btn:disabled { background:#334; color:#556; cursor:not-allowed; }
+.presets { display:flex; gap:0.3rem; align-items:center; }
+.plabel { font-size:0.5rem; color:#333; letter-spacing:0.1em; white-space:nowrap; }
+.pbtn {
+  font-family:'IBM Plex Mono',monospace; font-size:0.58rem; padding:3px 7px;
+  background:transparent; border:1px solid rgba(255,255,255,0.1); color:#555;
+  cursor:pointer; letter-spacing:0.04em; transition:all 0.15s; white-space:nowrap;
+}
+.pbtn:hover { border-color:#7EC88C; color:#7EC88C; }
+#keys-btn {
+  font-family:'IBM Plex Mono',monospace; font-size:0.6rem; padding:4px 10px;
+  background:transparent; border:1px solid rgba(255,255,255,0.1); color:#555;
+  cursor:pointer; transition:all 0.15s; letter-spacing:0.05em; flex-shrink:0;
+}
+#keys-btn:hover { color:#c8ccc8; border-color:rgba(255,255,255,0.3); }
+#keys-btn.has-keys { color:#7EC88C; border-color:rgba(126,200,140,0.3); }
+#clear-btn {
+  font-family:'IBM Plex Mono',monospace; font-size:0.58rem; padding:3px 10px;
+  background:transparent; border:1px solid rgba(255,255,255,0.08); color:#444;
+  cursor:pointer; transition:all 0.15s;
+}
+#clear-btn:hover { color:#e04040; border-color:#e04040; }
+
+/* ── BOARD ── */
+#board {
+  position:fixed; top:52px; left:0; right:0; bottom:0;
+  background-color:#c8a46c;
+  background-image:
+    repeating-linear-gradient(-25deg, rgba(0,0,0,0.03) 0px, transparent 1px, transparent 6px),
+    repeating-linear-gradient(65deg, rgba(0,0,0,0.025) 0px, transparent 1px, transparent 7px),
+    radial-gradient(ellipse 130% 130% at 35% 25%, #d8b47c 0%, #c8a46c 45%, #b89048 80%, #a07830 100%);
+  overflow:hidden;
+}
+#string-canvas { position:absolute; inset:0; pointer-events:none; z-index:1; }
+#nodes { position:absolute; inset:0; z-index:2; }
+
+/* ── EMPTY STATE ── */
+#empty-state {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  text-align:center; pointer-events:none; z-index:3;
+}
+.es-icon { font-size:2.5rem; margin-bottom:0.8rem; opacity:0.25; }
+.es-title { font-family:'Special Elite',cursive; font-size:1.2rem; color:rgba(60,35,5,0.35); margin-bottom:0.4rem; }
+.es-sub { font-family:'IBM Plex Mono',monospace; font-size:0.62rem; color:rgba(60,35,5,0.25); letter-spacing:0.08em; line-height:1.9; }
+
+/* ── NODE CARD ── */
+.node-card {
+  position:absolute; width:190px;
+  box-shadow: 2px 3px 10px rgba(60,35,5,0.3), 0 1px 3px rgba(60,35,5,0.15);
+  cursor:pointer; user-select:none; z-index:10;
+  opacity:0; transition: opacity 0.3s, box-shadow 0.2s;
+}
+.node-card.visible { opacity:1; }
+.node-card:hover { box-shadow:3px 6px 18px rgba(60,35,5,0.45); z-index:50; }
+.node-card.dragging { box-shadow:6px 12px 32px rgba(60,35,5,0.55); z-index:100; }
+.node-card.highlighted { outline:2px solid #c02020; z-index:60; }
+.node-card.dimmed { opacity:0.28 !important; }
+.node-card.dead { opacity:0.4 !important; }
+
+.node-pin {
+  position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+  width:13px; height:13px; border-radius:50%;
+  box-shadow:0 2px 6px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.25); z-index:5;
+}
+
+/* live/sim indicator stripe */
+.node-stripe {
+  height:3px; width:100%;
+}
+.stripe-live { background:linear-gradient(90deg, #4a9a5a, #7EC88C); }
+.stripe-sim  { background:linear-gradient(90deg, #5a5a3a, #8a8a4a); }
+.stripe-partial { background:linear-gradient(90deg, #8a6a20, #c89a40); }
+.stripe-error { background:linear-gradient(90deg, #8a2020, #c04040); }
+
+.node-header {
+  padding:9px 9px 6px; border-bottom:1px solid rgba(0,0,0,0.07);
+  display:flex; align-items:flex-start; gap:6px;
+}
+.node-icon { font-size:1rem; flex-shrink:0; line-height:1.2; margin-top:1px; }
+.node-type { font-family:'IBM Plex Mono',monospace; font-size:0.46rem; letter-spacing:0.14em; color:#999; text-transform:uppercase; margin-bottom:1px; }
+.node-title { font-family:'Special Elite',cursive; font-size:0.8rem; color:#1a1a1a; line-height:1.25; word-break:break-all; }
+.node-body { padding:6px 9px 9px; }
+.node-row { display:flex; gap:4px; margin-bottom:3px; font-family:'IBM Plex Mono',monospace; font-size:0.56rem; line-height:1.5; }
+.nl { color:#aaa; flex-shrink:0; width:46px; }
+.nv { color:#333; word-break:break-all; }
+.nv.found   { color:#226622; }
+.nv.notfound{ color:#aa4444; }
+.nv.warn    { color:#8a5500; }
+.nv.danger  { color:#cc2200; }
+.nv.code    { color:#224488; font-size:0.54rem; }
+.nv.dim     { color:#aaa; font-style:italic; }
+
+.node-foot {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:4px 9px 7px; gap:4px;
+}
+.node-badge { font-family:'IBM Plex Mono',monospace; font-size:0.45rem; letter-spacing:0.1em; padding:1px 5px; }
+.b-live    { background:#d0f0d0; color:#226622; }
+.b-sim     { background:#eeeecc; color:#666622; }
+.b-breach  { background:#ffe8e8; color:#cc2200; }
+.b-partial { background:#fff4d8; color:#996600; }
+.b-dead    { background:#eeeeee; color:#888; }
+.b-info    { background:#e8f0ff; color:#2244cc; }
+.b-error   { background:#ffe0e0; color:#993333; }
+
+.data-source { font-family:'IBM Plex Mono',monospace; font-size:0.42rem; color:#bbb; letter-spacing:0.06em; }
+.data-source.live { color:#4a9a5a; }
+
+/* loading shimmer */
+.node-loading .node-row .nv { background:#e0d8c0; color:transparent; border-radius:2px; animation:shimmer 1.2s infinite; }
+@keyframes shimmer { 0%,100%{opacity:0.5} 50%{opacity:1} }
+
+/* ── SCANNER ── */
+#scanner {
+  position:absolute; top:0.8rem; left:0.8rem; width:310px;
+  background:rgba(8,8,12,0.94); border:1px solid rgba(255,255,255,0.09);
+  font-family:'IBM Plex Mono',monospace; font-size:0.62rem;
+  z-index:200; box-shadow:0 4px 20px rgba(0,0,0,0.6);
+  max-height:280px; display:none; flex-direction:column;
+}
+#scanner.on { display:flex; }
+.sbar { padding:5px 10px; border-bottom:1px solid rgba(255,255,255,0.07); display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
+.stitle { font-size:0.52rem; letter-spacing:0.15em; color:#444; text-transform:uppercase; }
+.sclose { background:none; border:none; color:#444; cursor:pointer; font-size:0.75rem; }
+.sclose:hover { color:#aaa; }
+#slog { padding:7px 10px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:1px; }
+#slog::-webkit-scrollbar { width:2px; }
+#slog::-webkit-scrollbar-thumb { background:#222; }
+.sline { opacity:0; animation:sapp 0.15s forwards; line-height:1.9; }
+@keyframes sapp { to{opacity:1} }
+.sline.plain  { color:#444; }
+.sline.plain::before  { content:'> '; color:#2a2a2a; }
+.sline.ok     { color:#5a9a5a; }
+.sline.ok::before     { content:'✓ '; color:#5a9a5a; }
+.sline.live   { color:#7EC88C; }
+.sline.live::before   { content:'◉ '; color:#7EC88C; }
+.sline.warn   { color:#aa8030; }
+.sline.warn::before   { content:'! '; color:#aa8030; }
+.sline.err    { color:#aa4040; }
+.sline.err::before    { content:'✗ '; color:#aa4040; }
+.sline.done   { color:#7ec88c; font-weight:500; }
+.sline.done::before   { content:'▶ '; }
+.sline.target { color:#c8ccc8; font-size:0.65rem; }
+.sline.target::before { content:'⊕ '; color:#7ec88c; }
+
+/* ── API KEYS MODAL ── */
+#keys-modal {
+  position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.7);
+  display:none; align-items:center; justify-content:center;
+  font-family:'IBM Plex Mono',monospace;
+}
+#keys-modal.open { display:flex; }
+.keys-box {
+  background:#0e0e12; border:1px solid rgba(255,255,255,0.12);
+  width:100%; max-width:520px; box-shadow:0 8px 40px rgba(0,0,0,0.7);
+}
+.keys-header { padding:1rem 1.2rem; border-bottom:1px solid rgba(255,255,255,0.07); display:flex; justify-content:space-between; align-items:center; }
+.keys-title { font-size:0.7rem; letter-spacing:0.15em; color:#7EC88C; text-transform:uppercase; }
+.keys-close { background:none; border:none; color:#555; cursor:pointer; font-size:0.9rem; }
+.keys-body { padding:1.2rem; }
+.keys-intro { font-size:0.62rem; color:#555; line-height:1.8; margin-bottom:1.2rem; padding-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); }
+.keys-intro a { color:#7EC88C; }
+.key-group { margin-bottom:1.2rem; }
+.key-label { font-size:0.55rem; letter-spacing:0.12em; color:#666; text-transform:uppercase; margin-bottom:0.4rem; display:flex; align-items:center; gap:0.5rem; }
+.key-badge-free { background:rgba(126,200,140,0.15); color:#7EC88C; font-size:0.45rem; padding:1px 5px; letter-spacing:0.1em; }
+.key-badge-paid { background:rgba(212,150,40,0.15); color:#c89a40; font-size:0.45rem; padding:1px 5px; letter-spacing:0.1em; }
+.key-input {
+  width:100%; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1);
+  color:#c8ccc8; font-family:'IBM Plex Mono',monospace; font-size:0.7rem;
+  padding:0.5rem 0.7rem; outline:none;
+}
+.key-input:focus { border-color:rgba(126,200,140,0.3); }
+.key-hint { font-size:0.55rem; color:#444; margin-top:0.3rem; line-height:1.6; }
+.keys-save {
+  width:100%; background:#7EC88C; color:#0a1a0c; border:none; cursor:pointer;
+  font-family:'IBM Plex Mono',monospace; font-size:0.7rem; font-weight:500;
+  padding:0.6rem; letter-spacing:0.1em; margin-top:0.5rem; transition:background 0.15s;
+}
+.keys-save:hover { background:#9EE8AC; }
+.key-status { font-size:0.55rem; margin-top:0.3rem; }
+.key-status.set { color:#7EC88C; }
+.key-status.unset { color:#555; }
+
+/* ── DETAIL PANEL ── */
+#detail {
+  position:fixed; right:0; top:52px; bottom:0; width:360px;
+  background:rgba(10,10,14,0.97); border-left:1px solid rgba(255,255,255,0.07);
+  z-index:300; display:flex; flex-direction:column;
+  transform:translateX(100%); transition:transform 0.28s cubic-bezier(.2,.8,.4,1);
+  font-family:'IBM Plex Mono',monospace; overflow:hidden;
+}
+#detail.open { transform:translateX(0); }
+.dbar { padding:0.7rem 1rem; border-bottom:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.dtype { font-size:0.52rem; letter-spacing:0.2em; color:#444; text-transform:uppercase; }
+.dclose { background:none; border:1px solid rgba(255,255,255,0.09); color:#444; font-family:'IBM Plex Mono',monospace; font-size:0.58rem; padding:2px 8px; cursor:pointer; transition:all 0.15s; }
+.dclose:hover { color:#ccc; border-color:rgba(255,255,255,0.3); }
+.dbody { padding:1.1rem; overflow-y:auto; flex:1; }
+.dbody::-webkit-scrollbar { width:3px; }
+.dbody::-webkit-scrollbar-thumb { background:#1a1a1a; }
+
+.dtitle { font-family:'Special Elite',cursive; font-size:1.05rem; color:#ccc8b8; margin-bottom:0.2rem; line-height:1.3; word-break:break-all; }
+.dsub { font-size:0.55rem; color:#444; letter-spacing:0.07em; margin-bottom:1rem; padding-bottom:0.7rem; border-bottom:1px solid rgba(255,255,255,0.05); }
+.dsource { display:inline-block; font-size:0.48rem; padding:1px 5px; margin-left:0.4rem; }
+.dsource.live { background:rgba(126,200,140,0.12); color:#7EC88C; }
+.dsource.sim  { background:rgba(180,180,80,0.1); color:#aaaa60; }
+.dsource.err  { background:rgba(180,60,60,0.1); color:#cc6060; }
+
+.dsec { margin-bottom:1rem; }
+.dsec-title { font-size:0.52rem; letter-spacing:0.18em; color:#444; text-transform:uppercase; margin-bottom:0.5rem; padding-bottom:0.25rem; border-bottom:1px solid rgba(255,255,255,0.04); }
+.drow { display:flex; gap:0.5rem; margin-bottom:0.35rem; font-size:0.66rem; line-height:1.6; }
+.dlabel { color:#444; flex-shrink:0; width:90px; }
+.dval { color:#9a9e9a; word-break:break-all; }
+.dval.found  { color:#6abb6a; }
+.dval.warn   { color:#c89a40; }
+.dval.danger { color:#cc5050; }
+.dval.code   { color:#8898c8; font-size:0.6rem; }
+.dval.dim    { color:#444; font-style:italic; }
+
+.tbox { background:rgba(126,200,140,0.05); border:1px solid rgba(126,200,140,0.13); padding:0.75rem; margin-top:0.8rem; }
+.tbox-title { font-size:0.52rem; letter-spacing:0.15em; color:#7ec88c; text-transform:uppercase; margin-bottom:0.4rem; }
+.tbox-text  { font-size:0.63rem; color:#5a7a60; line-height:1.7; font-family:'Courier Prime',monospace; }
+.tools { display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.5rem; }
+.tool { font-size:0.52rem; padding:2px 6px; border:1px solid rgba(126,200,140,0.18); color:rgba(126,200,140,0.5); }
+
+.raw-toggle { font-size:0.52rem; color:#444; cursor:pointer; margin-top:0.8rem; padding:0.4rem 0; border-top:1px solid rgba(255,255,255,0.04); letter-spacing:0.05em; }
+.raw-toggle:hover { color:#888; }
+.raw-data { display:none; margin-top:0.5rem; padding:0.7rem; background:rgba(0,0,0,0.3); font-size:0.58rem; color:#666; line-height:1.7; word-break:break-all; max-height:200px; overflow-y:auto; }
+.raw-data.open { display:block; }
+
+/* ── HINT ── */
+#hint { position:absolute; bottom:0.8rem; right:0.8rem; font-family:'IBM Plex Mono',monospace; font-size:0.52rem; color:rgba(60,35,5,0.4); letter-spacing:0.08em; pointer-events:none; z-index:200; }
+
+/* ── LEGEND ── */
+#legend {
+  position:absolute; bottom:0.8rem; left:0.8rem;
+  font-family:'IBM Plex Mono',monospace; font-size:0.52rem;
+  display:none; flex-direction:column; gap:3px;
+  background:rgba(160,120,40,0.25); padding:0.5rem 0.7rem;
+  border:1px solid rgba(160,120,40,0.3);
+}
+#legend.visible { display:flex; }
+.leg-row { display:flex; align-items:center; gap:6px; color:rgba(60,35,5,0.6); }
+.leg-dot { width:8px; height:3px; flex-shrink:0; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">OSINT<em>//</em>BOARD</div>
+  <div class="live-badge">LIVE DATA</div>
+  <div class="search-wrap">
+    <input id="search-input" type="text" placeholder="IP address or domain (live) · email or username (simulated)…" />
+    <button id="search-btn" onclick="go()">INVESTIGATE</button>
+  </div>
+  <div class="presets">
+    <span class="plabel">LIVE →</span>
+    <button class="pbtn" onclick="preset('8.8.8.8')">8.8.8.8</button>
+    <button class="pbtn" onclick="preset('github.com')">github.com</button>
+    <button class="pbtn" onclick="preset('1.1.1.1')">1.1.1.1</button>
+  </div>
+  <button id="keys-btn" onclick="openKeys()">⚙ API KEYS</button>
+  <button id="clear-btn" onclick="clearAll()">CLEAR</button>
+</div>
+
+<div id="board">
+  <canvas id="string-canvas"></canvas>
+  <div id="nodes"></div>
+  <div id="empty-state">
+    <div class="es-icon">📌</div>
+    <div class="es-title">Investigation Board</div>
+    <div class="es-sub">
+      Enter an IP or domain for live data.<br>
+      Add API keys for breach lookups.<br>
+      Drag nodes · click to inspect.
+    </div>
+  </div>
+  <div id="hint"></div>
+  <div id="legend">
+    <div class="leg-row"><div class="leg-dot" style="background:#7EC88C"></div> Live API data</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#c89a40"></div> Simulated data</div>
+    <div class="leg-row"><div class="leg-dot" style="background:#c04040"></div> API error / no key</div>
+  </div>
+</div>
+
+<div id="scanner">
+  <div class="sbar"><span class="stitle">Recon Terminal</span><button class="sclose" onclick="this.closest('#scanner').classList.remove('on')">×</button></div>
+  <div id="slog"></div>
+</div>
+
+<!-- API KEYS MODAL -->
+<div id="keys-modal">
+  <div class="keys-box">
+    <div class="keys-header">
+      <span class="keys-title">API Key Configuration</span>
+      <button class="keys-close" onclick="closeKeys()">×</button>
+    </div>
+    <div class="keys-body">
+      <div class="keys-intro">
+        Two APIs are free with no key required — <strong style="color:#7EC88C">ipinfo.io</strong> (IP) and <strong style="color:#7EC88C">crt.sh</strong> (domains). The rest need a key. Keys are stored only in your browser memory for this session.
+      </div>
+
+      <div class="key-group">
+        <div class="key-label">HaveIBeenPwned API Key <span class="key-badge-paid">PAID ~$3.50/mo</span></div>
+        <input class="key-input" id="key-hibp" type="password" placeholder="Paste your HIBP API key…" />
+        <div class="key-hint">Get a key at <strong>haveibeenpwned.com/API/Key</strong> — enables real breach lookups for email addresses.</div>
+        <div class="key-status unset" id="status-hibp">No key set — email breaches will be simulated</div>
+      </div>
+
+      <div class="key-group">
+        <div class="key-label">AbuseIPDB API Key <span class="key-badge-free">FREE ACCOUNT</span></div>
+        <input class="key-input" id="key-abuseipdb" type="password" placeholder="Paste your AbuseIPDB API key…" />
+        <div class="key-hint">Free at <strong>abuseipdb.com</strong> — enables real IP reputation and blocklist checks.</div>
+        <div class="key-status unset" id="status-abuseipdb">No key set — IP reputation will be simulated</div>
+      </div>
+
+      <button class="keys-save" onclick="saveKeys()">SAVE KEYS</button>
+    </div>
+  </div>
+</div>
+
+<div id="detail">
+  <div class="dbar"><span class="dtype" id="dtype">—</span><button class="dclose" onclick="closeDetail()">[ CLOSE ]</button></div>
+  <div class="dbody" id="dbody"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════
+// API KEYS
+// ═══════════════════════════════════════
+const KEYS = { hibp: '', abuseipdb: '' };
+
+function openKeys() {
+  document.getElementById('key-hibp').value = KEYS.hibp;
+  document.getElementById('key-abuseipdb').value = KEYS.abuseipdb;
+  updateKeyStatuses();
+  document.getElementById('keys-modal').classList.add('open');
+}
+function closeKeys() { document.getElementById('keys-modal').classList.remove('open'); }
+function saveKeys() {
+  KEYS.hibp      = document.getElementById('key-hibp').value.trim();
+  KEYS.abuseipdb = document.getElementById('key-abuseipdb').value.trim();
+  updateKeyStatuses();
+  const btn = document.getElementById('keys-btn');
+  btn.classList.toggle('has-keys', !!(KEYS.hibp || KEYS.abuseipdb));
+  closeKeys();
+}
+function updateKeyStatuses() {
+  const hibpEl = document.getElementById('status-hibp');
+  const abuseEl = document.getElementById('status-abuseipdb');
+  if (KEYS.hibp)      { hibpEl.textContent = '✓ Key set — live breach lookups enabled'; hibpEl.className='key-status set'; }
+  else                { hibpEl.textContent = 'No key set — email breaches will be simulated'; hibpEl.className='key-status unset'; }
+  if (KEYS.abuseipdb) { abuseEl.textContent = '✓ Key set — live IP reputation enabled'; abuseEl.className='key-status set'; }
+  else                { abuseEl.textContent = 'No key set — IP reputation will be simulated'; abuseEl.className='key-status unset'; }
+}
+
+// ═══════════════════════════════════════
+// SEEDED RNG (for simulated parts)
+// ═══════════════════════════════════════
+function rngFrom(s) {
+  let h = s.split('').reduce((a,c) => (Math.imul(31,a)+c.charCodeAt(0))|0, 0) >>> 0;
+  return () => { h^=h<<13; h^=h>>>17; h^=h<<5; return (h>>>0)/4294967296; };
+}
+function pick(arr,r) { return arr[Math.floor(r()*arr.length)]; }
+function pickN(arr,n,r){ return [...arr].sort(()=>r()-0.5).slice(0,n); }
+function fakeDate(r,y0=2015,y1=2023){ return `${y0+Math.floor(r()*(y1-y0+1))}-${String(1+Math.floor(r()*12)).padStart(2,'0')}-${String(1+Math.floor(r()*28)).padStart(2,'0')}`; }
+function fakeIP(r){ return `${80+Math.floor(r()*160)}.${Math.floor(r()*255)}.${Math.floor(r()*255)}.${1+Math.floor(r()*253)}`; }
+
+// ═══════════════════════════════════════
+// STATIC DATA
+// ═══════════════════════════════════════
+const BREACHES_SIM = [
+  {name:'Adobe (2013)',size:'152M',data:'email, MD5 hash, hint'},
+  {name:'LinkedIn (2012)',size:'6.5M',data:'email, SHA1 hash'},
+  {name:'LinkedIn (2021)',size:'700M',data:'email, phone, scraped data'},
+  {name:'RockYou (2009)',size:'32M',data:'plaintext password'},
+  {name:'Dropbox (2012)',size:'68M',data:'email, bcrypt/SHA1'},
+  {name:'Canva (2019)',size:'137M',data:'email, username, bcrypt'},
+  {name:'Twitch (2021)',size:'2.5M',data:'email, username, bcrypt'},
+  {name:'COMB (2021)',size:'3.2B',data:'email, plaintext password'},
+];
+const PLATFORMS = [
+  {name:'GitHub',icon:'⌨'},{name:'Twitter/X',icon:'✦'},{name:'Reddit',icon:'◉'},
+  {name:'LinkedIn',icon:'in'},{name:'Instagram',icon:'◈'},{name:'HackerNews',icon:'▲'},
+  {name:'Steam',icon:'⚙'},{name:'Keybase',icon:'🔑'},{name:'GitLab',icon:'◆'},
+  {name:'Medium',icon:'M'},{name:'Pastebin',icon:'📋'},{name:'DEV.to',icon:'{}'},
+];
+const REGISTRARS = ['Namecheap Inc.','GoDaddy LLC','Cloudflare Registrar','Porkbun LLC','Name.com'];
+const STACKS = [
+  ['Nginx','PHP 8','WordPress'],['Apache','Python/Django','PostgreSQL'],
+  ['Cloudflare','React','Node.js'],['Nginx','Ruby on Rails','Redis'],
+];
+
+// ═══════════════════════════════════════
+// TYPE DETECTION
+// ═══════════════════════════════════════
+function detectType(s) {
+  s = s.trim();
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(s)) return 'ip';
+  if (/@/.test(s)) return 'email';
+  if (/^[a-z0-9][a-z0-9\-]{1,61}\.[a-z]{2,}$/i.test(s)) return 'domain';
+  return 'username';
+}
+
+// ═══════════════════════════════════════
+// LIVE API CALLS
+// ═══════════════════════════════════════
+
+async function apiIPInfo(ip) {
+  try {
+    addLog(`Querying ipinfo.io/${ip}…`, 'plain');
+    const res = await fetch(`https://ipinfo.io/${ip}/json`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    addLog(`ipinfo.io — ${d.city || '?'}, ${d.country || '?'}`, 'live');
+    return { ok:true, data:d };
+  } catch(e) {
+    addLog(`ipinfo.io failed: ${e.message}`, 'err');
+    return { ok:false, error:e.message };
+  }
+}
+
+async function apiAbuseIPDB(ip) {
+  if (!KEYS.abuseipdb) return { ok:false, error:'No API key', simulated:true };
+  try {
+    addLog(`Querying AbuseIPDB…`, 'plain');
+    const res = await fetch(`https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(ip)}&maxAgeInDays=90&verbose`, {
+      headers: { 'Key': KEYS.abuseipdb, 'Accept': 'application/json' }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    const score = d.data?.abuseConfidenceScore ?? 0;
+    addLog(`AbuseIPDB — score: ${score}%`, score > 20 ? 'warn' : 'live');
+    return { ok:true, data:d.data };
+  } catch(e) {
+    addLog(`AbuseIPDB failed: ${e.message}`, 'err');
+    return { ok:false, error:e.message };
+  }
+}
+
+async function apiCrtSh(domain) {
+  try {
+    addLog(`Querying crt.sh for ${domain}…`, 'plain');
+    const res = await fetch(`https://crt.sh/?q=${encodeURIComponent(domain)}&output=json`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    // extract unique subdomains
+    const subs = new Set();
+    data.forEach(cert => {
+      (cert.name_value || '').split('\n').forEach(name => {
+        name = name.trim().toLowerCase().replace(/^\*\./, '');
+        if (name.endsWith(domain.toLowerCase()) && name !== domain.toLowerCase()) {
+          const sub = name.replace('.'+domain.toLowerCase(),'');
+          if (sub && !sub.includes('*')) subs.add(sub);
+        }
+      });
+    });
+    // get unique issuers
+    const issuers = [...new Set(data.slice(0,5).map(c => {
+      const m = c.issuer_name?.match(/O=([^,]+)/);
+      return m ? m[1].replace(/"/g,'') : null;
+    }).filter(Boolean))];
+    // find most recent cert
+    const recent = data.sort((a,b) => new Date(b.not_before) - new Date(a.not_before))[0];
+    addLog(`crt.sh — ${data.length} certificates, ${subs.size} subdomains`, 'live');
+    return { ok:true, subdomains:[...subs].slice(0,12), certCount:data.length, issuers, recent, raw:data.slice(0,3) };
+  } catch(e) {
+    addLog(`crt.sh failed: ${e.message}`, 'err');
+    return { ok:false, error:e.message };
+  }
+}
+
+async function apiDNS(domain, type='A') {
+  try {
+    addLog(`DNS lookup ${type} for ${domain}…`, 'plain');
+    const res = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    const answers = (d.Answer || []).map(a => a.data);
+    addLog(`DNS ${type} — ${answers.length > 0 ? answers[0] : 'NXDOMAIN'}`, 'live');
+    return { ok:true, answers, status:d.Status, raw:d };
+  } catch(e) {
+    addLog(`DNS failed: ${e.message}`, 'err');
+    return { ok:false, error:e.message };
+  }
+}
+
+async function apiHIBP(email) {
+  if (!KEYS.hibp) return { ok:false, error:'No API key', simulated:true };
+  try {
+    addLog(`Querying HaveIBeenPwned for ${email}…`, 'plain');
+    const res = await fetch(`https://haveibeenpwned.com/api/v3/breachedaccount/${encodeURIComponent(email)}?truncateResponse=false`, {
+      headers: { 'hibp-api-key': KEYS.hibp, 'User-Agent': 'osint-board-educational' }
+    });
+    if (res.status === 404) {
+      addLog(`HIBP — no breaches found`, 'live');
+      return { ok:true, breaches:[] };
+    }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    addLog(`HIBP — found in ${data.length} breach(es)`, 'warn');
+    return { ok:true, breaches:data };
+  } catch(e) {
+    addLog(`HIBP failed: ${e.message}`, 'err');
+    return { ok:false, error:e.message };
+  }
+}
+
+// ═══════════════════════════════════════
+// NODE BUILDERS (Live + Sim mixed)
+// ═══════════════════════════════════════
+
+async function buildIPNodes(ip) {
+  const r = rngFrom(ip);
+  const out = [];
+
+  // Seed node
+  out.push(mkNode('seed','seed','seed','#c02020','#FFF9EF','🖥','Target IP Address',ip,
+    [{l:'Type',v:'IPv4 Public',c:''},{l:'Status',v:'Querying…',c:'dim'}],
+    {cls:'b-info',t:'SEED'},[],'sim', null,
+    {title:ip,type:'IP Address',secs:[{t:'Investigation Start',rows:[{l:'IP',v:ip,c:'found'},{l:'Type',v:'IPv4 Public',c:''}]}],
+     tech:{t:'IP Investigation',text:'An IP is fingerprinted via GeoIP, ASN lookup, reverse DNS, Shodan port scan, and threat intel. ipinfo.io and AbuseIPDB are queried live here.',tools:['Shodan','Censys','ipinfo.io','AbuseIPDB','VirusTotal']}}
+  ));
+
+  // Live: ipinfo.io
+  const ipInfo = await apiIPInfo(ip);
+  if (ipInfo.ok) {
+    const d = ipInfo.data;
+    const [orgAsn, ...orgParts] = (d.org||'Unknown').split(' ');
+    const orgName = orgParts.join(' ') || d.org || 'Unknown';
+    out.push(mkNode('geo','L','location','#228822','#F0FFF5','📍','Geolocation — LIVE',
+      `${d.city||'?'}, ${d.country||'?'}`,
+      [{l:'City',v:d.city||'Unknown',c:'found'},{l:'Country',v:d.country||'?',c:''},{l:'Org',v:orgName.slice(0,24),c:'warn'},{l:'TZ',v:d.timezone||'?',c:''}],
+      {cls:'b-live',t:'LIVE DATA'},['seed'],'live', ipInfo.data,
+      {title:`${d.city||'?'}, ${d.country||'?'}`,type:'GeoIP (ipinfo.io)',
+       secs:[{t:'Live GeoIP Data',rows:[
+         {l:'IP',v:d.ip,c:'code'},{l:'City',v:d.city||'Unknown',c:'found'},{l:'Region',v:d.region||'?',c:''},
+         {l:'Country',v:d.country||'?',c:''},{l:'Timezone',v:d.timezone||'?',c:''},{l:'ASN',v:orgAsn||'?',c:'code'},
+         {l:'Org',v:orgName||'?',c:'warn'},{l:'Hostname',v:d.hostname||'None',c:'dim'},
+         {l:'Loc',v:d.loc||'?',c:''},
+       ]}],
+       tech:{t:'IP Geolocation — ipinfo.io',text:'ipinfo.io provides free GeoIP lookups with city, country, ASN, and organisation data. Accuracy is city-level (~50km). Hosting/VPS IPs resolve to the data centre, not the end user. Source: ipinfo.io (live, no key required).',tools:['ipinfo.io','MaxMind GeoIP2','ip-api.com','Shodan']}
+      }
+    ));
+
+    // ASN node derived from live data
+    out.push(mkNode('asn','TL','domain','#1A60A0','#F0F8FF','🏢','ASN / ISP — LIVE',orgAsn||'Unknown ASN',
+      [{l:'Org',v:orgName.slice(0,26)||'Unknown',c:'warn'},{l:'ASN',v:orgAsn||'?',c:'code'},{l:'Source',v:'ipinfo.io',c:''}],
+      {cls:'b-live',t:'LIVE DATA'},['geo'],'live', {asn:orgAsn, org:orgName},
+      {title:orgAsn||'Unknown ASN',type:'Autonomous System',
+       secs:[{t:'ASN Data (Live)',rows:[{l:'ASN',v:orgAsn||'?',c:'code'},{l:'Organisation',v:orgName||'?',c:'warn'},{l:'Source',v:'ipinfo.io (live)',c:'found'}]}],
+       tech:{t:'ASN Lookup',text:'The ASN identifies which organisation controls an IP block. A hosting provider ASN means the IP is a rented VPS — potentially anonymous. Legal process to the provider may be required to de-anonymise.',tools:['bgp.he.net','RIPEstat','ipinfo.io/AS']}}
+    ));
+  } else {
+    // Fallback sim geo
+    const geo = pick([{city:'Amsterdam',cc:'NL'},{city:'Frankfurt',cc:'DE'},{city:'London',cc:'GB'}],r);
+    out.push(mkNode('geo','L','location','#996600','#FFF4D8','📍','Geolocation — FAILED',`Query failed`,
+      [{l:'Error',v:ipInfo.error||'Unknown',c:'danger'},{l:'Fallback',v:'Simulated data below',c:'warn'}],
+      {cls:'b-error',t:'API ERROR'},['seed'],'error', null,
+      {title:'GeoIP Failed',type:'API Error',secs:[{t:'Error',rows:[{l:'Error',v:ipInfo.error,c:'danger'},{l:'Cause',v:'CORS or network block',c:'warn'},{l:'Fix',v:'Run from a server with a proxy',c:''}]}],
+       tech:{t:'ipinfo.io',text:'ipinfo.io provides free IP geolocation. In some environments, browser-based requests may be blocked by CORS or network policies. In production, proxy the request server-side.',tools:['ipinfo.io','ip-api.com','MaxMind']}}
+    ));
+  }
+
+  // Live: AbuseIPDB (if key) or simulated
+  const abuse = await apiAbuseIPDB(ip);
+  if (abuse.ok && !abuse.simulated) {
+    const d = abuse.data;
+    const score = d.abuseConfidenceScore || 0;
+    const flagged = score > 10;
+    out.push(mkNode('threat','BL', flagged?'breach':'platform', flagged?'#cc2200':'#228822',
+      flagged?'#FFF0EE':'#F0FFF5', flagged?'⚠':'✓', 'Threat Intel — LIVE',
+      flagged?`Score: ${score}%`:'Clean IP',
+      [{l:'Score',v:`${score}% abuse confidence`,c:score>50?'danger':score>10?'warn':'found'},
+       {l:'Reports',v:`${d.totalReports||0} total reports`,c:d.totalReports>0?'warn':'found'},
+       {l:'Last seen',v:d.lastReportedAt?d.lastReportedAt.slice(0,10):'Never',c:d.lastReportedAt?'warn':''},
+      ],
+      {cls:'b-live',t:'LIVE DATA'},['seed'],'live', d,
+      {title:'AbuseIPDB Report',type:'Threat Intelligence',
+       secs:[{t:'Live Threat Data',rows:[
+         {l:'IP',v:d.ipAddress,c:'code'},{l:'Abuse score',v:`${score}%`,c:score>50?'danger':score>10?'warn':'found'},
+         {l:'Reports',v:String(d.totalReports||0),c:d.totalReports>0?'warn':'found'},
+         {l:'ISP',v:d.isp||'?',c:''},{l:'Usage type',v:d.usageType||'?',c:'warn'},
+         {l:'Country',v:d.countryCode||'?',c:''},{l:'Whitelisted',v:String(d.isWhitelisted||false),c:''},
+       ]}],
+       tech:{t:'AbuseIPDB — IP Reputation',text:'AbuseIPDB aggregates reports from network admins and security researchers. A high confidence score indicates the IP has been used for spam, C2, brute force, or scanning. Free API key at abuseipdb.com.',tools:['AbuseIPDB','VirusTotal','SpamHaus','Talos']}}
+    ));
+  } else {
+    // Simulated
+    const flagged = r() > 0.5;
+    const ABUSE_R = ['Spam','C2 beacon','SSH brute force','Port scanning','Web scraping'];
+    out.push(mkNode('threat','BL', flagged?'breach':'platform', flagged?'#cc2200':'#228822',
+      flagged?'#FFF0EE':'#F0FFF5', flagged?'⚠':'✓', 'Threat Intel — SIMULATED',
+      flagged?'Flagged IP':'Clean IP',
+      flagged?[{l:'Score',v:`${50+Math.floor(r()*50)}% simulated`,c:'danger'},{l:'Reason',v:pick(ABUSE_R,r),c:'danger'},{l:'Status',v:'ADD KEY for live data',c:'warn'}]
+             :[{l:'Score',v:'0% (simulated)',c:'found'},{l:'Status',v:'ADD KEY for live data',c:'warn'}],
+      {cls:'b-sim',t:'SIMULATED'},['seed'],'sim', null,
+      {title:'IP Reputation (Simulated)',type:'Threat Intelligence',
+       secs:[{t:'Note',rows:[{l:'Status',v:'Simulated — add AbuseIPDB key for live data',c:'warn'}]}],
+       tech:{t:'AbuseIPDB',text:'AbuseIPDB aggregates IP abuse reports. Free API key available at abuseipdb.com — enables real blocklist and reputation data.',tools:['AbuseIPDB','VirusTotal','SpamHaus']}}
+    ));
+  }
+
+  // DNS reverse lookup via Google (live)
+  const rdns = await apiDNS(ip.split('.').reverse().join('.')+'.in-addr.arpa.', 'PTR');
+  const ptrVal = rdns.ok && rdns.answers.length > 0 ? rdns.answers[0] : null;
+  out.push(mkNode('rdns','BR','domain','#1A60A0','#F0F8FF','🔄','Reverse DNS — LIVE',
+    ptrVal ? ptrVal.slice(0,30) : 'No PTR record',
+    [{l:'PTR',v:ptrVal||'NXDOMAIN',c:ptrVal?'code':'notfound'},{l:'Source',v:'Google DNS (live)',c:''}],
+    {cls:ptrVal?'b-live':'b-dead',t:ptrVal?'LIVE DATA':'NO PTR'},['geo'], ptrVal?'live':'live', rdns.raw||null,
+    {title:'Reverse DNS (PTR Record)',type:'DNS',
+     secs:[{t:'PTR Lookup (Live)',rows:[
+       {l:'IP',v:ip,c:'code'},{l:'PTR record',v:ptrVal||'None found',c:ptrVal?'found':'notfound'},
+       {l:'Source',v:'dns.google (live)',c:'found'},
+     ]}],
+     tech:{t:'Reverse DNS via Google DoH',text:'Google\'s DNS-over-HTTPS API resolves PTR records live. A custom PTR (mail.company.com) reveals the operating organisation. Auto-set PTRs from hosting providers (e.g. static.x.x.x.hetzner.de) confirm the ISP.',tools:['dig -x','nslookup','dns.google/resolve']}}
+  ));
+
+  // Simulated: open ports (Shodan not free)
+  const ports = [22,80,443,8080,8443,3306,27017,6379].filter(()=>r()>0.55).slice(0,5);
+  out.push(mkNode('ports','TR','domain','#6622BB','#F8F0FF','⚡','Open Ports — SIMULATED',
+    ports.length ? `${ports.length} ports (simulated)` : 'No ports found',
+    [{l:'Ports',v:ports.length?ports.join(', '):'None',c:ports.some(p=>[27017,6379,3306].includes(p))?'danger':'warn'},
+     {l:'Source',v:'Shodan (simulated — paid API)',c:'warn'}],
+    {cls:'b-sim',t:'SIMULATED'},['seed'],'sim', null,
+    {title:'Open Ports (Simulated)',type:'Shodan Fingerprint',
+     secs:[{t:'Note',rows:[{l:'Status',v:'Simulated — real data needs Shodan API ($)',c:'warn'},
+       {l:'Ports',v:ports.length?ports.join(', '):'None (simulated)',c:''},
+     ]}],
+     tech:{t:'Shodan Port Scanning',text:'Shodan continuously scans the internet and indexes open ports and service banners. Real queries need a paid Shodan account. For authorised targets, nmap provides the same data.',tools:['Shodan','Censys','Nmap (auth only)','Masscan']}}
+  ));
+
+  return out;
+}
+
+async function buildDomainNodes(domain) {
+  const r = rngFrom(domain);
+  const out = [];
+
+  // DNS A record (live)
+  const dnsA = await apiDNS(domain, 'A');
+  const ipAddr = dnsA.ok && dnsA.answers.length > 0 ? dnsA.answers[0] : fakeIP(r);
+  const dnsLive = dnsA.ok;
+
+  out.push(mkNode('seed','seed','seed','#c02020','#FFF9EF','🌐','Target Domain',domain,
+    [{l:'IP',v:ipAddr,c:'code'},{l:'DNS',v:dnsLive?'Live — dns.google':'Simulated',c:dnsLive?'found':'warn'}],
+    {cls:'b-info',t:'SEED'},[],'live', dnsA.raw||null,
+    {title:domain,type:'Domain',
+     secs:[{t:'DNS A Record (Live)',rows:[
+       {l:'Domain',v:domain,c:'found'},{l:'A record',v:ipAddr,c:'code'},
+       {l:'Source',v:'dns.google (live)',c:'found'},{l:'Status code',v:String(dnsA.raw?.Status||0),c:''},
+     ]}],
+     tech:{t:'DNS A Record Lookup',text:'The A record maps a domain to its IP address. Google\'s DNS-over-HTTPS API (dns.google/resolve) is queried live — no API key needed. The resolved IP is then fed into the IP investigation branch.',tools:['dig','nslookup','dns.google/resolve','dnsx']}}
+  ));
+
+  // Live: crt.sh subdomains
+  const crt = await apiCrtSh(domain);
+  if (crt.ok) {
+    const subs = crt.subdomains;
+    const sensitives = subs.filter(s=>['admin','dev','staging','api','internal','vpn','login','test'].includes(s));
+    out.push(mkNode('ssl','TL','domain','#6622BB','#F8F0FF','🔒','SSL Certs + Subdomains — LIVE',
+      `${crt.certCount} certs, ${subs.length} subdomains`,
+      [{l:'Certs',v:`${crt.certCount} total (live)`,c:'found'},
+       {l:'Subdomains',v:subs.length>0?`${subs.length} found`:' None found',c:subs.length>0?'found':'notfound'},
+       {l:'Sensitive',v:sensitives.length>0?sensitives.join(', '):'None',c:sensitives.length>0?'danger':'found'},
+      ],
+      {cls:'b-live',t:'LIVE DATA'},['seed'],'live', {subdomains:subs, certCount:crt.certCount, recent:crt.recent},
+      {title:'SSL Certificate Transparency',type:'Cert Transparency (crt.sh)',
+       secs:[
+         {t:'Live Certificate Data',rows:[
+           {l:'Total certs',v:String(crt.certCount),c:'found'},
+           {l:'Subdomains',v:String(subs.length),c:subs.length>0?'found':''},
+           {l:'Source',v:'crt.sh (live)',c:'found'},
+           ...(crt.recent?[{l:'Most recent',v:(crt.recent.not_before||'').slice(0,10),c:'warn'},{l:'Issuer',v:(crt.issuers[0]||'?').slice(0,30),c:''}]:[]),
+         ]},
+         ...(subs.length > 0 ? [{t:'Discovered Subdomains',rows:subs.slice(0,10).map(s=>({l:`${s}.${domain}`,v:sensitives.includes(s)?'⚠ SENSITIVE':'',c:sensitives.includes(s)?'danger':'found'}))}] : []),
+       ],
+       tech:{t:'Certificate Transparency Logs — crt.sh',text:'Certificate transparency logs record every SSL certificate issued. crt.sh indexes these publicly, enabling passive subdomain enumeration with no active probing. This is one of the most reliable passive recon techniques. Source: crt.sh (live, no key needed).',tools:['crt.sh','Censys','certspotter','amass (passive)','subfinder']}}
+    ));
+
+    // Geo for domain IP (live)
+    if (ipAddr && !ipAddr.startsWith('192.') && !ipAddr.startsWith('10.')) {
+      const domainGeo = await apiIPInfo(ipAddr);
+      if (domainGeo.ok) {
+        const dg = domainGeo.data;
+        const [orgAsn, ...orgParts] = (dg.org||'').split(' ');
+        out.push(mkNode('geo','L','location','#228822','#F0FFF5','📍','Server Geolocation — LIVE',
+          `${dg.city||'?'}, ${dg.country||'?'}`,
+          [{l:'City',v:dg.city||'?',c:'found'},{l:'Org',v:(orgParts.join(' ')||'?').slice(0,22),c:'warn'},{l:'ASN',v:orgAsn||'?',c:'code'}],
+          {cls:'b-live',t:'LIVE DATA'},['seed'],'live', dg,
+          {title:`Server: ${dg.city||'?'}`,type:'Server Geolocation',
+           secs:[{t:'Live GeoIP',rows:[
+             {l:'IP',v:dg.ip,c:'code'},{l:'City',v:dg.city||'?',c:'found'},{l:'Country',v:dg.country||'?',c:''},
+             {l:'Org',v:dg.org||'?',c:'warn'},{l:'Timezone',v:dg.timezone||'?',c:''},
+           ]}],
+           tech:{t:'GeoIP for Domain Server',text:'After resolving the domain A record, the server IP is geolocated via ipinfo.io. This reveals the hosting provider and general location of the web server — useful for attributing infrastructure.',tools:['ipinfo.io','Shodan','Censys']}}
+        ));
+      }
+    }
+  } else {
+    out.push(mkNode('ssl','TL','domain','#996600','#FFF4D8','🔒','crt.sh — FAILED','Query failed',
+      [{l:'Error',v:crt.error||'Unknown',c:'danger'},{l:'Fallback',v:'Simulated data',c:'warn'}],
+      {cls:'b-error',t:'API ERROR'},['seed'],'error', null,
+      {title:'crt.sh Failed',type:'API Error',
+       secs:[{t:'Error Detail',rows:[{l:'Error',v:crt.error||'?',c:'danger'},{l:'URL',v:'crt.sh/?q='+domain+'&output=json',c:'code'}]}],
+       tech:{t:'crt.sh Certificate Transparency',text:'crt.sh is a free, open service. Query directly at https://crt.sh/?q=yourdomain&output=json. CORS or network issues may block browser-based requests.',tools:['crt.sh','Censys','certspotter']}}
+    ));
+  }
+
+  // DNS MX (live)
+  const dnsMX = await apiDNS(domain, 'MX');
+  out.push(mkNode('mx','TR','domain','#1A60A0','#F0F8FF','✉','MX Records — LIVE',
+    dnsMX.ok && dnsMX.answers.length > 0 ? dnsMX.answers[0].split(' ').pop() : 'No MX found',
+    [{l:'MX',v:dnsMX.ok&&dnsMX.answers.length>0?dnsMX.answers.slice(0,2).map(a=>a.split(' ').pop()).join(', '):'None',c:dnsMX.ok&&dnsMX.answers.length>0?'found':'notfound'},
+     {l:'Count',v:`${dnsMX.answers?.length||0} record(s)`,c:''},{l:'Source',v:'dns.google (live)',c:'found'}],
+    {cls:dnsMX.ok&&dnsMX.answers.length>0?'b-live':'b-dead',t:dnsMX.ok?'LIVE DATA':'NO MX'},['seed'],'live', dnsMX.raw||null,
+    {title:'MX Records (Live)',type:'Email Infrastructure',
+     secs:[{t:'Mail Exchange Records',rows:[
+       ...(dnsMX.answers||[]).slice(0,5).map(a=>({l:'MX',v:a.split(' ').pop(),c:'found'})),
+       {l:'Source',v:'dns.google (live)',c:'found'},
+     ]}],
+     tech:{t:'MX Record Lookup',text:'MX records reveal the email infrastructure — Google Workspace, Microsoft 365, Proofpoint, etc. This helps identify phishing targets, understand org size, and find associated email-security vendors.',tools:['dig MX','dns.google','MXToolbox','dnsx']}}
+  ));
+
+  // TXT records (live — may contain SPF, DKIM, verification tokens)
+  const dnsTXT = await apiDNS(domain, 'TXT');
+  const txtVals = (dnsTXT.answers||[]).slice(0,4);
+  const spf = txtVals.find(t=>t.includes('v=spf'));
+  out.push(mkNode('txt','BR','domain','#6622BB','#F8F0FF','📝','TXT Records — LIVE',
+    txts => {
+      if (spf) return 'SPF + TXT found';
+      if (txtVals.length) return `${txtVals.length} TXT record(s)`;
+      return 'No TXT records';
+    }, // this pattern won't work inline, handled below
+    [{l:'SPF',v:spf?'Present':'Not found',c:spf?'found':'warn'},
+     {l:'Records',v:`${txtVals.length} total`,c:txtVals.length?'found':'notfound'},
+     {l:'Source',v:'dns.google (live)',c:'found'}],
+    {cls:txtVals.length?'b-live':'b-dead',t:'LIVE DATA'},['seed'],'live', dnsTXT.raw||null,
+    {title:'TXT Records (Live)',type:'DNS TXT',
+     secs:[{t:'TXT Records',rows:[
+       {l:'SPF',v:spf||'Not found',c:spf?'found':'warn'},
+       ...(txtVals.slice(0,3).map(t=>({l:'TXT',v:t.slice(0,50)+(t.length>50?'…':''),c:''}))),
+       {l:'Source',v:'dns.google (live)',c:'found'},
+     ]}],
+     tech:{t:'TXT Record Analysis',text:'TXT records contain SPF policies, DMARC, DKIM public keys, domain verification tokens (Google, Microsoft), and sometimes cloud provider metadata. Weak SPF/DMARC = email spoofing risk.',tools:['dig TXT','dns.google','dmarcian','MXToolbox']}}
+  ));
+
+  // Fix the TXT title which had a function call issue
+  const txtNode = out[out.length-1];
+  txtNode.title = txtVals.length > 0 ? (spf ? 'SPF + TXT found' : `${txtVals.length} TXT record(s)`) : 'No TXT records';
+  txtNode.rows[0] = {l:'SPF',v:spf||'Not found',c:spf?'found':'warn'};
+
+  // WHOIS — simulated (needs paid API in browser)
+  const reg = pick(REGISTRARS, r);
+  const created = fakeDate(r, 2012, 2021);
+  out.push(mkNode('whois','BL','domain','#996600','#FFFDE8','📜','WHOIS — SIMULATED',reg.split(' ')[0],
+    [{l:'Registrar',v:reg,c:''},{l:'Created',v:created,c:'warn'},{l:'Note',v:'Simulated — needs paid API',c:'dim'}],
+    {cls:'b-sim',t:'SIMULATED'},['seed'],'sim', null,
+    {title:'WHOIS (Simulated)',type:'Domain WHOIS',
+     secs:[{t:'Note',rows:[{l:'Status',v:'Simulated — browser WHOIS needs a paid API',c:'warn'},{l:'Alternative',v:'Run `whois '+domain+'` in terminal',c:''}]}],
+     tech:{t:'WHOIS Lookup',text:'WHOIS registration data is best queried via the CLI (`whois domain.com`) or SecurityTrails. Browser-based WHOIS queries typically need a paid API (whoisjson.com, DomainTools). The data reveals registrar, creation date, and sometimes registrant identity.',tools:['whois CLI','SecurityTrails','DomainTools','ICANN Lookup']}}
+  ));
+
+  return out;
+}
+
+async function buildEmailNodes(email, r) {
+  const [user, domain] = email.split('@');
+  const out = [];
+
+  out.push(mkNode('seed','seed','seed','#c02020','#FFF9EF','📧','Target Email',email,
+    [{l:'Username',v:user,c:'found'},{l:'Domain',v:domain,c:''},{l:'Status',v:'Investigating…',c:'dim'}],
+    {cls:'b-info',t:'SEED'},[],'sim', null,
+    {title:email,type:'Email',secs:[{t:'Overview',rows:[{l:'Email',v:email,c:'found'},{l:'Username',v:user,c:'found'},{l:'Domain',v:domain,c:''}]}],
+     tech:{t:'Email OSINT',text:'An email address yields a username (for platform enumeration) and a domain (for WHOIS/infrastructure OSINT). The full address is checked against breach databases via HIBP.',tools:['HaveIBeenPwned','Holehe','h8mail','Hunter.io']}}
+  ));
+
+  // HIBP (live if key, simulated otherwise)
+  const hibp = await apiHIBP(email);
+  if (hibp.ok && !hibp.simulated) {
+    if (hibp.breaches.length === 0) {
+      out.push(mkNode('breach_0','BL','platform','#228822','#F0FFF5','✓','HIBP — LIVE','No breaches found',
+        [{l:'Result',v:'Not in any breach',c:'found'},{l:'Source',v:'HIBP (live)',c:'found'}],
+        {cls:'b-live',t:'LIVE DATA'},['seed'],'live', {breaches:[]},
+        {title:'No Breaches Found',type:'HIBP (Live)',secs:[{t:'Result',rows:[{l:'Email',v:email,c:'found'},{l:'Breaches',v:'None found',c:'found'},{l:'Source',v:'HaveIBeenPwned (live)',c:'found'}]}],
+         tech:{t:'HaveIBeenPwned',text:'HIBP aggregates hundreds of data breaches. This email was not found in any known breach. Source: HaveIBeenPwned live API.',tools:['HaveIBeenPwned','h8mail','Dehashed']}}
+      ));
+    } else {
+      hibp.breaches.slice(0, 3).forEach((b, i) => {
+        out.push(mkNode(`breach_${i}`,'BL','breach','#cc2200','#FFF0EE','⚠','Breach — LIVE',b.Name,
+          [{l:'Date',v:b.BreachDate,c:'danger'},{l:'Records',v:`${(b.PwnCount||0).toLocaleString()}`,c:'danger'},{l:'Source',v:'HIBP (live)',c:'found'}],
+          {cls:'b-breach',t:'LIVE BREACH'},['seed'],'live', b,
+          {title:b.Name,type:'Data Breach (Live)',
+           secs:[{t:'Live Breach Data',rows:[
+             {l:'Name',v:b.Name,c:'danger'},{l:'Date',v:b.BreachDate,c:'warn'},{l:'Records',v:`${(b.PwnCount||0).toLocaleString()}`,c:'danger'},
+             {l:'Domain',v:b.Domain||'?',c:''},{l:'Data',v:(b.DataClasses||[]).slice(0,3).join(', '),c:'warn'},
+             {l:'Verified',v:String(b.IsVerified),c:b.IsVerified?'found':'warn'},
+           ]}],
+           tech:{t:'HaveIBeenPwned — Breach Lookup',text:'This breach record is live from the HIBP API. The data classes show what was exposed. If passwords were exposed (even hashed), assume they\'re cracked — the email/password combination is likely in credential stuffing lists.',tools:['HaveIBeenPwned','h8mail','Dehashed','Breach-Parse']}}
+        ));
+      });
+    }
+  } else {
+    // Simulated breaches
+    const sBreaches = pickN(BREACHES_SIM, 1+Math.floor(r()*2), r);
+    sBreaches.forEach((b,i) => {
+      out.push(mkNode(`breach_${i}`,'BL','breach','#cc2200','#FFF0EE','⚠','Breach — SIMULATED',b.name,
+        [{l:'Records',v:b.size,c:'danger'},{l:'Data',v:b.data,c:'warn'},{l:'Note',v:hibp.simulated?'Add HIBP key for live':'API error',c:'warn'}],
+        {cls:'b-sim',t:'SIMULATED'},['seed'],'sim', null,
+        {title:b.name,type:'Data Breach (Simulated)',secs:[{t:'Simulated Data',rows:[{l:'Note',v:'Add HaveIBeenPwned API key for live breach data',c:'warn'}]}],
+         tech:{t:'HaveIBeenPwned',text:'Real HIBP lookups need a paid API key (~$3.50/month). Get one at haveibeenpwned.com/API/Key. Without a key, this card shows simulated data.',tools:['HaveIBeenPwned','h8mail','Dehashed']}}
+      ));
+    });
+  }
+
+  // Username + platforms (simulated — no public API)
+  out.push(mkNode('username','L','identity','#6622BB','#F8F0FF','👤','Username — EXTRACTED','@'+user,
+    [{l:'Source',v:'email prefix',c:''},{l:'Pattern',v:user.includes('.')?'real name?':'alias',c:'warn'},{l:'Note',v:'Platform checks simulated',c:'dim'}],
+    {cls:'b-partial',t:'PARTIAL'},['seed'],'sim', null,
+    {title:'@'+user,type:'Username',secs:[{t:'Analysis',rows:[{l:'Username',v:user,c:'found'},{l:'Format',v:user.includes('.')?'firstname.lastname':'alias/handle',c:'warn'}]}],
+     tech:{t:'Username Extraction',text:'The email local-part is extracted and used for platform enumeration. Tools like Sherlock and Holehe automate this. Platform checks are simulated here — no public API exists for bulk username probing.',tools:['Sherlock','Holehe','Maigret','WhatsMyName']}}
+  ));
+
+  const plats = pickN(PLATFORMS, 6+Math.floor(r()*3), r);
+  plats.forEach((p,i) => {
+    const found = r() > 0.42;
+    out.push(mkNode(`plat_${i}`,i<3?'R':'TR', found?'platform':'dead', found?'#DAA020':'#888',
+      found?'#FFFDE8':'#EFEFEF', p.icon, `${p.name} — ${found?'FOUND':'MISS'} (sim)`, p.name,
+      found?[{l:'Result',v:'Account found (sim)',c:'found'},{l:'Note',v:'Simulated — use Sherlock',c:'dim'}]
+           :[{l:'Result',v:'No account (sim)',c:'notfound'}],
+      {cls:found?'b-sim':'b-dead',t:found?'SIM FOUND':'NOT FOUND'},['username'],'sim', null,
+      {title:p.name,type:'Platform Check (Simulated)',secs:[{t:'Note',rows:[{l:'Status',v:'Simulated — run Sherlock for real results',c:'warn'}]}],
+       tech:{t:'Platform Enumeration',text:'Sherlock (github.com/sherlock-project/sherlock) checks 300+ platforms in seconds. Browser-based platform probing is blocked by CORS on most sites. Run Sherlock locally: python3 sherlock username',tools:['Sherlock','Maigret','WhatsMyName','Holehe']}}
+    ));
+  });
+
+  return out;
+}
+
+// ═══════════════════════════════════════
+// NODE FACTORY
+// ═══════════════════════════════════════
+function mkNode(id, zone, type, pin, bg, icon, typeLabel, title, rows, badge, conns, dataSource, rawData, detail) {
+  return { id, zone, type, pin, bg, icon, typeLabel, title, rows, badge, conns, dataSource, rawData, detail, el:null, x:0, y:0, rot:0 };
+}
+
+// ═══════════════════════════════════════
+// LAYOUT
+// ═══════════════════════════════════════
+const ZONE_POS = {
+  seed:{cx:0.50,cy:0.50}, L:{cx:0.21,cy:0.50}, R:{cx:0.78,cy:0.44},
+  TL:{cx:0.26,cy:0.24},   TR:{cx:0.74,cy:0.24}, BL:{cx:0.24,cy:0.74},
+  BR:{cx:0.74,cy:0.74},   T:{cx:0.50,cy:0.18},  B:{cx:0.50,cy:0.78},
+};
+const zoneCounts = {};
+function assignPos(n, r) {
+  const bw = boardEl.offsetWidth || 900, bh = boardEl.offsetHeight || 600;
+  const z = ZONE_POS[n.zone] || ZONE_POS.B;
+  zoneCounts[n.zone] = (zoneCounts[n.zone]||0);
+  const idx = zoneCounts[n.zone]++;
+  const angle = idx * 2.3 + r() * 0.9, rad = 0.025 + r() * 0.075;
+  n.x = Math.max(15, Math.min(bw-215, (z.cx + Math.cos(angle)*rad)*bw));
+  n.y = Math.max(15, Math.min(bh-240, (z.cy + Math.sin(angle)*rad)*bh));
+  n.rot = (r()-0.5)*6;
+}
+
+// ═══════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════
+let allNodes=[], boardEl, canvasEl, ctx;
+
+function renderNode(n) {
+  const el = document.createElement('div');
+  el.className = `node-card${n.type==='dead'?' dead':''}`;
+  el.style.cssText = `left:${n.x}px; top:${n.y}px; background:${n.bg}; transform:rotate(${n.rot}deg);`;
+
+  const stripeClass = {live:'stripe-live', sim:'stripe-sim', partial:'stripe-partial', error:'stripe-error'}[n.dataSource] || 'stripe-sim';
+  el.innerHTML = `
+    <div class="node-pin" style="background:${n.pin}"></div>
+    <div class="node-stripe ${stripeClass}"></div>
+    <div class="node-header">
+      <div class="node-icon">${n.icon}</div>
+      <div><div class="node-type">${n.typeLabel}</div><div class="node-title">${n.title}</div></div>
+    </div>
+    <div class="node-body">
+      ${n.rows.map(row=>`<div class="node-row"><span class="nl">${row.l}</span><span class="nv ${row.c||''}">${row.v}</span></div>`).join('')}
+    </div>
+    <div class="node-foot">
+      <span class="node-badge ${n.badge.cls}">${n.badge.t}</span>
+      <span class="data-source ${n.dataSource==='live'?'live':''}">${n.dataSource==='live'?'● LIVE':'○ SIM'}</span>
+    </div>`;
+
+  makeDraggable(el, n);
+  el.addEventListener('click', () => openDetail(n));
+  document.getElementById('nodes').appendChild(el);
+  n.el = el;
+  requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('visible')));
+}
+
+function makeDraggable(el, n) {
+  let ox,oy,nx0,ny0,down=false;
+  el.addEventListener('mousedown', e => {
+    if (e.button!==0) return;
+    down=true; ox=e.clientX; oy=e.clientY; nx0=n.x; ny0=n.y;
+    el.classList.add('dragging'); e.stopPropagation();
+    const mv=e=>{if(!down)return;n.x=nx0+(e.clientX-ox);n.y=ny0+(e.clientY-oy);el.style.left=n.x+'px';el.style.top=n.y+'px';drawStrings();};
+    const up=()=>{down=false;el.classList.remove('dragging');window.removeEventListener('mousemove',mv);window.removeEventListener('mouseup',up);};
+    window.addEventListener('mousemove',mv); window.addEventListener('mouseup',up);
+  });
+}
+
+// ═══════════════════════════════════════
+// STRINGS
+// ═══════════════════════════════════════
+function drawStrings() {
+  const w=canvasEl.width, h=canvasEl.height;
+  ctx.clearRect(0,0,w,h);
+  allNodes.forEach(n => {
+    if (!n.el) return;
+    n.conns.forEach(cid => {
+      const p = allNodes.find(x=>x.id===cid);
+      if (!p||!p.el) return;
+      const x1=p.x+95, y1=p.y, x2=n.x+95, y2=n.y;
+      const cpx=(x1+x2)/2, cpy=(y1+y2)/2+16+Math.abs(x2-x1)*0.06;
+      ctx.strokeStyle = n.dataSource==='live' ? 'rgba(60,120,70,0.5)' : 'rgba(90,8,8,0.45)';
+      ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.quadraticCurveTo(cpx,cpy,x2,y2); ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath(); ctx.arc(x1,y1,2.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x2,y2,2.5,0,Math.PI*2); ctx.fill();
+    });
+  });
+}
+function resizeCanvas() { canvasEl.width=boardEl.offsetWidth; canvasEl.height=boardEl.offsetHeight; drawStrings(); }
+
+// ═══════════════════════════════════════
+// DETAIL PANEL
+// ═══════════════════════════════════════
+function openDetail(n) {
+  const d = n.detail;
+  document.getElementById('dtype').textContent = d.type||'—';
+  const srcLabel = n.dataSource==='live'?'<span class="dsource live">● LIVE</span>':n.dataSource==='error'?'<span class="dsource err">✗ ERROR</span>':'<span class="dsource sim">○ SIMULATED</span>';
+  let h = `<div class="dtitle">${d.title}${srcLabel}</div><div class="dsub">${n.typeLabel} · ${n.id}</div>`;
+  d.secs.forEach(s => {
+    h += `<div class="dsec"><div class="dsec-title">${s.t}</div>${s.rows.map(r=>`<div class="drow"><span class="dlabel">${r.l}</span><span class="dval ${r.c||''}">${r.v}</span></div>`).join('')}</div>`;
+  });
+  if (d.tech) {
+    h += `<div class="tbox"><div class="tbox-title">// OSINT TECHNIQUE</div><div class="tbox-text">${d.tech.text}</div><div class="tools">${d.tech.tools.map(t=>`<span class="tool">${t}</span>`).join('')}</div></div>`;
+  }
+  if (n.rawData && n.dataSource==='live') {
+    h += `<div class="raw-toggle" onclick="this.nextSibling.classList.toggle('open')">▶ View raw API response</div><div class="raw-data">${JSON.stringify(n.rawData, null, 2)}</div>`;
+  }
+  document.getElementById('dbody').innerHTML = h;
+  document.getElementById('detail').classList.add('open');
+  allNodes.forEach(x=>{if(!x.el)return;x.el.classList.remove('highlighted','dimmed');});
+  const rel = new Set([n.id,...n.conns]);
+  allNodes.forEach(x=>{if(!x.el)return;(rel.has(x.id)||x.conns.includes(n.id))?x.el.classList.add('highlighted'):x.el.classList.add('dimmed');});
+}
+function closeDetail() {
+  document.getElementById('detail').classList.remove('open');
+  allNodes.forEach(x=>x.el&&x.el.classList.remove('highlighted','dimmed'));
+}
+
+// ═══════════════════════════════════════
+// SCANNER
+// ═══════════════════════════════════════
+function addLog(t, c) {
+  const sc=document.getElementById('scanner'), log=document.getElementById('slog');
+  sc.classList.add('on');
+  const ln=document.createElement('div');
+  ln.className=`sline ${c}`; ln.textContent=t;
+  log.appendChild(ln); log.scrollTop=log.scrollHeight;
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ═══════════════════════════════════════
+// MAIN
+// ═══════════════════════════════════════
+async function go() {
+  const input = document.getElementById('search-input').value.trim();
+  if (!input) return;
+  clearAll();
+  await sleep(30);
+
+  const type = detectType(input);
+  const r = rngFrom(input);
+  document.getElementById('empty-state').style.display='none';
+  document.getElementById('legend').classList.add('visible');
+  document.getElementById('search-btn').disabled = true;
+  document.getElementById('slog').innerHTML = '';
+  document.getElementById('scanner').classList.add('on');
+
+  addLog(`target: ${input}`, 'target');
+  addLog(`type: ${type}`, 'plain');
+
+  let raw = [];
+  try {
+    if (type==='ip')          raw = await buildIPNodes(input);
+    else if (type==='domain') raw = await buildDomainNodes(input);
+    else if (type==='email')  raw = await buildEmailNodes(input, r);
+    else {
+      // Username — fully simulated
+      addLog('Username: platform checks are simulated', 'warn');
+      addLog('Use Sherlock locally for real results', 'warn');
+      const { buildUsernameNodes } = window;
+      raw = buildUsernameNodes ? await buildUsernameNodes(input,r) : buildUsernameSimple(input,r);
+    }
+  } catch(e) {
+    addLog(`Error: ${e.message}`, 'err');
+  }
+
+  Object.keys(zoneCounts).forEach(k=>delete zoneCounts[k]);
+  raw.forEach(n => assignPos(n, r));
+  allNodes = raw;
+
+  for (let i=0; i<raw.length; i++) {
+    await sleep(80 + i*60);
+    renderNode(raw[i]);
+    drawStrings();
+  }
+
+  const liveCount = raw.filter(n=>n.dataSource==='live').length;
+  const simCount  = raw.filter(n=>n.dataSource==='sim').length;
+  addLog(`${raw.length} nodes — ${liveCount} live, ${simCount} simulated`, 'done');
+  document.getElementById('hint').textContent = `${raw.length} nodes · ${liveCount} live · drag to rearrange · click to inspect`;
+  document.getElementById('search-btn').disabled = false;
+}
+
+function buildUsernameSimple(username, r) {
+  const plats = PLATFORMS;
+  const out = [];
+  out.push(mkNode('seed','seed','seed','#c02020','#FFF9EF','👤','Target Username','@'+username,
+    [{l:'Type',v:'Username',c:''},{l:'Note',v:'Platform checks simulated',c:'warn'}],
+    {cls:'b-info',t:'SEED'},[],'sim',null,
+    {title:'@'+username,type:'Username',secs:[{t:'Note',rows:[{l:'Status',v:'All data simulated for usernames',c:'warn'},{l:'Real tool',v:'Sherlock (github.com/sherlock-project)',c:'found'}]}],
+     tech:{t:'Username OSINT',text:'Sherlock queries 300+ platforms. Browser-based probing is blocked by CORS. Install Sherlock locally: pip install sherlock-project, then: sherlock username',tools:['Sherlock','Maigret','WhatsMyName','Holehe']}}
+  ));
+  pickN(plats, 8, r).forEach((p,i) => {
+    const found = r()>0.4;
+    out.push(mkNode(`plat_${i}`,i<4?'R':'BR',found?'platform':'dead',found?'#DAA020':'#888',found?'#FFFDE8':'#EFEFEF',
+      p.icon,`${p.name} (simulated)`,p.name,
+      found?[{l:'Result',v:'Found (simulated)',c:'found'}]:[{l:'Result',v:'Not found (sim)',c:'notfound'}],
+      {cls:found?'b-sim':'b-dead',t:found?'SIM FOUND':'NOT FOUND'},['seed'],'sim',null,
+      {title:p.name,type:'Platform (Simulated)',secs:[{t:'Note',rows:[{l:'Real tool',v:'Sherlock for actual checks',c:'warn'}]}],
+       tech:{t:'Platform Enumeration',text:'Sherlock checks 300+ platforms: github.com/sherlock-project/sherlock',tools:['Sherlock','Maigret']}}
+    ));
+  });
+  return out;
+}
+
+function clearAll() {
+  allNodes.forEach(n=>n.el&&n.el.remove());
+  allNodes=[]; Object.keys(zoneCounts).forEach(k=>delete zoneCounts[k]);
+  if(ctx) ctx.clearRect(0,0,canvasEl.width,canvasEl.height);
+  document.getElementById('empty-state').style.display='';
+  document.getElementById('legend').classList.remove('visible');
+  document.getElementById('hint').textContent='';
+  document.getElementById('scanner').classList.remove('on');
+  document.getElementById('slog').innerHTML='';
+  document.getElementById('search-btn').disabled=false;
+  closeDetail();
+}
+function preset(v) { document.getElementById('search-input').value=v; go(); }
+
+document.addEventListener('DOMContentLoaded', () => {
+  boardEl=document.getElementById('board'); canvasEl=document.getElementById('string-canvas'); ctx=canvasEl.getContext('2d');
+  resizeCanvas(); window.addEventListener('resize',resizeCanvas);
+  document.getElementById('search-input').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDetail();});
+});
+</script>
+</body>
+</html>
